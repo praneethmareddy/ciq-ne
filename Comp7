@@ -1,0 +1,68 @@
+import pandas as pd
+import re
+
+def normalize_name(name):
+    """Normalize names by replacing spaces, dashes, slashes with underscores and lowercasing."""
+    return re.sub(r'[\s\-\/]', '_', name).lower()
+
+def extract_parameters_from_structured_csv(file_path):
+    """Extract parameters from a structured CSV file with sections."""
+    parameters = set()
+
+    with open(file_path, 'r') as f:
+        lines = [line.strip() for line in f if line.strip()]
+
+    i = 0
+    while i < len(lines):
+        if lines[i].startswith('@'):
+            i += 1
+            if i < len(lines) and not lines[i].startswith('@'):
+                param_line = lines[i]
+                params = [normalize_name(p.strip()) for p in param_line.split(',') if p.strip()]
+                parameters.update(params)
+                i += 1
+            while i < len(lines) and not lines[i].startswith('@'):
+                i += 1
+        else:
+            i += 1
+
+    return parameters
+
+def extract_parameters_from_reference_csv(file_path):
+    """Extract and normalize column headers from a flat reference CSV file."""
+    df = pd.read_csv(file_path, nrows=0)
+    return {normalize_name(col) for col in df.columns}
+
+def compare_csvs(structured_csv_file, reference_csv_file):
+    structured_params = extract_parameters_from_structured_csv(structured_csv_file)
+    reference_params = extract_parameters_from_reference_csv(reference_csv_file)
+
+    print("=== Normalized Parameters from Structured CSV ===")
+    print(sorted(structured_params))
+
+    print("\n=== Normalized Columns from Reference CSV ===")
+    print(sorted(reference_params))
+
+    matching = structured_params.intersection(reference_params)
+    only_in_structured = structured_params - reference_params
+    only_in_reference = reference_params - structured_params
+
+    max_len = max(len(matching), len(only_in_structured), len(only_in_reference))
+    table = {
+        'Matching Parameters': list(sorted(matching)) + [''] * (max_len - len(matching)),
+        'Only in Structured CSV': list(sorted(only_in_structured)) + [''] * (max_len - len(only_in_structured)),
+        'Only in Reference CSV': list(sorted(only_in_reference)) + [''] * (max_len - len(only_in_reference))
+    }
+
+    df = pd.DataFrame(table)
+    print("\n=== Parameter Comparison Table ===")
+    print(df.to_string(index=False))
+
+    return {
+        'matching_parameters': sorted(matching),
+        'structured_csv_only': sorted(only_in_structured),
+        'reference_csv_only': sorted(only_in_reference)
+    }
+
+# Example usage:
+compare_csvs('path/to/structured.csv', 'path/to/reference.csv')
