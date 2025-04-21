@@ -1,0 +1,60 @@
+import pandas as pd
+import glob
+import re
+
+def normalize_name(name):
+    """Normalize column/parameter names by replacing spaces, dashes, and slashes with underscores."""
+    return re.sub(r'[\s\-\/]', '_', name).lower()
+
+def extract_csv_parameters(csv_folder):
+    """Extract parameter names from CSV files, handling multiple value rows and blank lines"""
+    all_parameters = set()
+    csv_files = glob.glob(f"{csv_folder}/*.csv")
+
+    for file in csv_files:
+        with open(file, 'r') as f:
+            lines = [line.strip() for line in f if line.strip()]  # remove blank lines
+
+        i = 0
+        while i < len(lines):
+            if lines[i].startswith('@'):
+                i += 1
+                if i < len(lines):
+                    params_line = lines[i]
+                    params = [normalize_name(p.strip()) for p in params_line.split(',') if p.strip()]
+                    all_parameters.update(params)
+                i += 1
+                while i < len(lines) and not lines[i].startswith('@'):
+                    i += 1
+            else:
+                i += 1
+    return all_parameters
+
+def compare_with_xlsx(csv_folder, xlsx_file):
+    csv_params = extract_csv_parameters(csv_folder)
+    xlsx_df = pd.read_excel(xlsx_file)
+    xlsx_columns = {normalize_name(col) for col in xlsx_df.columns}
+
+    matching = csv_params.intersection(xlsx_columns)
+    csv_only = csv_params.difference(xlsx_columns)
+    xlsx_only = xlsx_columns.difference(csv_params)
+
+    # Create a DataFrame for tabular display
+    max_len = max(len(matching), len(csv_only), len(xlsx_only))
+    table_data = {
+        'Matching Parameters': list(sorted(matching)) + [''] * (max_len - len(matching)),
+        'Only in CSV': list(sorted(csv_only)) + [''] * (max_len - len(csv_only)),
+        'Only in XLSX': list(sorted(xlsx_only)) + [''] * (max_len - len(xlsx_only))
+    }
+    df = pd.DataFrame(table_data)
+    print("\n=== Parameter Comparison Table ===")
+    print(df.to_string(index=False))
+
+    return {
+        'matching_parameters': sorted(matching),
+        'csv_only_parameters': sorted(csv_only),
+        'xlsx_only_columns': sorted(xlsx_only)
+    }
+
+# Example usage
+results = compare_with_xlsx('path/to/csv/folder', 'path/to/file.xlsx')
