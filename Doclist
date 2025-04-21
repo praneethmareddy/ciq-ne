@@ -3,41 +3,43 @@ from langchain.document_loaders import TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
 
-# Path to your template folder
 template_dir = "path/to/templates"
 
-# Setup splitter
 text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
 
-# Utility to categorize files
 def extract_metadata(filename):
-    name = filename.lower()
-    if "global" in name:
-        return {"operator": "global", "category": "global"}
-    else:
-        operator = name.replace("_template.txt", "")
-        return {"operator": operator, "category": "operator"}
+    lower = filename.lower()
 
-# Prepare the doclist
+    if lower.startswith("global"):
+        return {
+            "operator": "global",
+            "category": "global"
+        }
+    elif lower.startswith("master_template_"):
+        # Get operator code from file name
+        operator = lower.replace("master_template_", "").replace(".txt", "")
+        return {
+            "operator": operator,
+            "category": "operator"
+        }
+    else:
+        return {
+            "operator": "unknown",
+            "category": "unknown"
+        }
+
 doclist = []
 
 for filename in os.listdir(template_dir):
-    if filename.endswith(".txt"):  # or .pdf, .md etc.
+    if filename.endswith(".txt"):
         filepath = os.path.join(template_dir, filename)
-
-        # Load file
         loader = TextLoader(filepath)
         raw_docs = loader.load()
-
-        # Split into chunks
         split_docs = text_splitter.split_documents(raw_docs)
 
-        # Add metadata to each chunk
+        metadata = extract_metadata(filename)
         for doc in split_docs:
-            meta = extract_metadata(filename)
-            doc.metadata.update(meta)
+            doc.metadata.update(metadata)
             doc.metadata["source"] = filename
 
         doclist.extend(split_docs)
-
-# Now doclist is ready for RAG
