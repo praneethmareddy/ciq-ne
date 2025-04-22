@@ -1,0 +1,61 @@
+import os
+from langchain.document_loaders import TextLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.schema import Document
+
+# Path to your template folder
+template_dir = "path/to/templates"
+
+# Set up the text splitter
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+
+# Function to extract operator and category from file name
+def extract_metadata(filename):
+    lower = filename.lower()
+    if lower.startswith("global"):
+        return {
+            "operator": "global",
+            "category": "global"
+        }
+    elif lower.startswith("master_template_"):
+        operator = lower.replace("master_template_", "").replace(".txt", "")
+        return {
+            "operator": operator,
+            "category": "operator"
+        }
+    else:
+        return {
+            "operator": "unknown",
+            "category": "unknown"
+        }
+
+doclist = []
+
+for filename in os.listdir(template_dir):
+    if filename.endswith(".txt"):
+        filepath = os.path.join(template_dir, filename)
+        
+        loader = TextLoader(filepath)
+        raw_docs = loader.load()
+        split_docs = text_splitter.split_documents(raw_docs)
+
+        metadata = extract_metadata(filename)
+
+        for doc in split_docs:
+            # Embed metadata into the content text
+            enriched_content = (
+                f"[SOURCE: {filename}] "
+                f"[OPERATOR: {metadata['operator']}] "
+                f"[CATEGORY: {metadata['category']}]\n\n"
+                f"{doc.page_content}"
+            )
+
+            enriched_doc = Document(
+                page_content=enriched_content,
+                metadata={
+                    **metadata,
+                    "source": filename
+                }
+            )
+
+            doclist.append(enriched_doc)
